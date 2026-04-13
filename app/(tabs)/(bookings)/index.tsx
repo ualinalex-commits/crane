@@ -17,7 +17,6 @@ import { useManagement } from '@/lib/context/ManagementContext';
 import { useAuth } from '@/lib/context/AuthContext';
 import { Typography, Spacing, Radius } from '@/lib/theme';
 import { Chip, EmptyState, BookingCard, BottomSheet } from '@/components/ui';
-import { getCraneById, getCompanyById } from '@/lib/mock';
 import type { Booking } from '@/lib/types';
 
 type ViewMode = 'month' | 'week';
@@ -297,8 +296,9 @@ function BookingDetailSheet({
   onClose: () => void;
 }) {
   const { colors } = useTheme();
-  const crane = booking ? getCraneById(booking.craneId) : null;
-  const company = booking ? getCompanyById(booking.companyId) : null;
+  const { cranes, companies } = useManagement();
+  const crane = booking ? cranes.find((c) => c.id === booking.craneId) ?? null : null;
+  const company = booking ? companies.find((c) => c.id === booking.companyId) ?? null : null;
 
   return (
     <BottomSheet visible={booking !== null} onClose={onClose}>

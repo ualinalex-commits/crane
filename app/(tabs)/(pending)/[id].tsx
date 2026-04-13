@@ -11,9 +11,9 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '@/lib/hooks/useTheme';
 import { useAuth } from '@/lib/context/AuthContext';
 import { useBookings } from '@/lib/context/BookingsContext';
+import { useManagement } from '@/lib/context/ManagementContext';
 import { Typography, Spacing, Radius, Shadow } from '@/lib/theme';
 import { StatusBadge, BottomSheet } from '@/components/ui';
-import { getCraneById, getCompanyById, getUserById } from '@/lib/mock';
 
 function pad(n: number) {
   return String(n).padStart(2, '0');
@@ -79,6 +79,7 @@ export default function PendingBookingDetailScreen() {
   const { colors } = useTheme();
   const { user } = useAuth();
   const { getBookingById, approveBooking, rejectBooking } = useBookings();
+  const { cranes, companies, users } = useManagement();
 
   const [rejectSheetOpen, setRejectSheetOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
@@ -86,10 +87,10 @@ export default function PendingBookingDetailScreen() {
   const booking = getBookingById(id);
   if (!booking) return null;
 
-  const crane = getCraneById(booking.craneId);
-  const company = getCompanyById(booking.companyId);
-  const requester = getUserById(booking.requestedById);
-  const approver = booking.approvedById ? getUserById(booking.approvedById) : undefined;
+  const crane = cranes.find((c) => c.id === booking.craneId);
+  const company = companies.find((c) => c.id === booking.companyId);
+  const requester = users.find((u) => u.id === booking.requestedById);
+  const approver = booking.approvedById ? users.find((u) => u.id === booking.approvedById) : undefined;
 
   const isAP = user?.role === 'Appointed_Person';
   const isPending = booking.status === 'pending';

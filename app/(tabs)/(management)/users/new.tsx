@@ -12,7 +12,6 @@ import { useTheme } from '@/lib/hooks/useTheme';
 import { useManagement } from '@/lib/context/ManagementContext';
 import { useAuth } from '@/lib/context/AuthContext';
 import { Typography, Spacing, Radius, RoleConfig } from '@/lib/theme';
-import { mockSites } from '@/lib/mock';
 import type { UserRole } from '@/lib/types';
 
 const ROLES: { value: UserRole; icon: string }[] = [
@@ -25,7 +24,7 @@ const ROLES: { value: UserRole; icon: string }[] = [
 
 export default function NewUserScreen() {
   const { colors } = useTheme();
-  const { site } = useAuth();
+  const { site, availableSites } = useAuth();
   const { addUser, companies } = useManagement();
 
   const [name, setName] = useState('');
@@ -152,7 +151,7 @@ export default function NewUserScreen() {
 
       <Section label="Site Access">
         <View style={{ gap: Spacing.sm }}>
-          {mockSites.map((s) => {
+          {availableSites.map((s) => {
             const isSelected = siteIds.includes(s.id);
             return (
               <Pressable

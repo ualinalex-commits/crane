@@ -1,53 +1,104 @@
-import React, { createContext, useContext, useReducer } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../supabase';
 import type { User, Site } from '../types';
-import { mockUsers, mockSites } from '../mock';
 
 interface AuthState {
   user: User | null;
   site: Site | null;
+  availableSites: Site[];
+  loading: boolean;
 }
-
-type AuthAction =
-  | { type: 'LOGIN'; userId: string; siteId: string }
-  | { type: 'SWITCH_SITE'; siteId: string }
-  | { type: 'LOGOUT' };
 
 interface AuthContextValue extends AuthState {
-  login: (userId: string, siteId: string) => void;
+  login: (email: string, password: string) => Promise<void>;
   switchSite: (siteId: string) => void;
-  logout: () => void;
-  availableSites: Site[];
+  logout: () => Promise<void>;
 }
 
-function authReducer(state: AuthState, action: AuthAction): AuthState {
-  switch (action.type) {
-    case 'LOGIN': {
-      const user = mockUsers.find((u) => u.id === action.userId) ?? null;
-      const site = mockSites.find((s) => s.id === action.siteId) ?? null;
-      return { user, site };
-    }
-    case 'SWITCH_SITE': {
-      const site = mockSites.find((s) => s.id === action.siteId) ?? null;
-      return { ...state, site };
-    }
-    case 'LOGOUT':
-      return { user: null, site: null };
-    default:
-      return state;
-  }
+async function fetchProfileAndSites(userId: string): Promise<{ user: User; sites: Site[] }> {
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('id, name, email, role, company_id, active, user_sites(site_id)')
+    .eq('id', userId)
+    .single();
+
+  if (error || !profile) throw error ?? new Error('Profile not found');
+
+  const siteIds = (profile.user_sites as { site_id: string }[]).map((us) => us.site_id);
+
+  const { data: sites, error: sitesError } = await supabase
+    .from('sites')
+    .select('*')
+    .in('id', siteIds);
+
+  if (sitesError) throw sitesError;
+
+  return {
+    user: {
+      id: profile.id,
+      name: profile.name,
+      email: profile.email,
+      role: profile.role,
+      siteIds,
+      companyId: profile.company_id ?? undefined,
+      active: profile.active,
+    },
+    sites: (sites ?? []) as Site[],
+  };
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(authReducer, { user: null, site: null });
+  const [state, setState] = useState<AuthState>({
+    user: null,
+    site: null,
+    availableSites: [],
+    loading: true,
+  });
+
+  // Restore session on app launch
+  useEffect(() => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        try {
+          const { user, sites } = await fetchProfileAndSites(session.user.id);
+          setState({ user, site: sites[0] ?? null, availableSites: sites, loading: false });
+        } catch {
+          setState((s) => ({ ...s, loading: false }));
+        }
+      } else {
+        setState((s) => ({ ...s, loading: false }));
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') {
+        setState({ user: null, site: null, availableSites: [], loading: false });
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
 
   const value: AuthContextValue = {
     ...state,
-    availableSites: mockSites,
-    login: (userId, siteId) => dispatch({ type: 'LOGIN', userId, siteId }),
-    switchSite: (siteId) => dispatch({ type: 'SWITCH_SITE', siteId }),
-    logout: () => dispatch({ type: 'LOGOUT' }),
+    login: async (email, password) => {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      const { user, sites } = await fetchProfileAndSites(data.user.id);
+      setState({ user, site: sites[0] ?? null, availableSites: sites, loading: false });
+    },
+    switchSite: (siteId) => {
+      const site = state.availableSites.find((s) => s.id === siteId) ?? null;
+      setState((s) => ({ ...s, site }));
+    },
+    logout: async () => {
+      await supabase.auth.signOut();
+      setState({ user: null, site: null, availableSites: [], loading: false });
+    },
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

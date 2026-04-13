@@ -1,14 +1,24 @@
-import React, { createContext, useContext, useReducer, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import type { CraneLog } from '../types';
-import { mockCraneLogs } from '../mock';
+import { supabase } from '../supabase';
+import { useAuth } from './AuthContext';
 
-interface CraneLogsState {
-  logs: CraneLog[];
+function rowToLog(row: any): CraneLog {
+  return {
+    id: row.id,
+    siteId: row.site_id,
+    craneId: row.crane_id,
+    companyId: row.company_id ?? undefined,
+    status: row.status,
+    jobDetails: row.job_details,
+    imageUri: row.image_uri ?? undefined,
+    startTime: row.start_time,
+    endTime: row.end_time ?? undefined,
+    isOpen: row.is_open,
+    createdById: row.created_by_id,
+    createdAt: row.created_at,
+  };
 }
-
-type CraneLogsAction =
-  | { type: 'ADD_LOG'; log: CraneLog }
-  | { type: 'CLOSE_LOG'; id: string; endTime: string };
 
 interface CraneLogsContextValue {
   logs: CraneLog[];
@@ -18,46 +28,76 @@ interface CraneLogsContextValue {
   closeLog: (id: string, endTime: string) => void;
 }
 
-function craneLogsReducer(state: CraneLogsState, action: CraneLogsAction): CraneLogsState {
-  switch (action.type) {
-    case 'ADD_LOG':
-      return { logs: [action.log, ...state.logs] };
-    case 'CLOSE_LOG':
-      return {
-        logs: state.logs.map((l) =>
-          l.id === action.id ? { ...l, isOpen: false, endTime: action.endTime } : l
-        ),
-      };
-    default:
-      return state;
-  }
-}
-
 const CraneLogsContext = createContext<CraneLogsContextValue | null>(null);
 
 export function CraneLogsProvider({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(craneLogsReducer, { logs: mockCraneLogs });
+  const { user, site } = useAuth();
+  const [logs, setLogs] = useState<CraneLog[]>([]);
 
-  const openLogs = useMemo(() => state.logs.filter((l) => l.isOpen), [state.logs]);
+  useEffect(() => {
+    if (!user || !site) { setLogs([]); return; }
+    supabase
+      .from('crane_logs')
+      .select('*')
+      .eq('site_id', site.id)
+      .order('created_at', { ascending: false })
+      .then(({ data, error }) => {
+        if (error) { console.error('crane_logs fetch:', error); return; }
+        if (data) setLogs(data.map(rowToLog));
+      });
+  }, [user?.id, site?.id]);
+
+  const openLogs = useMemo(() => logs.filter((l) => l.isOpen), [logs]);
 
   const value: CraneLogsContextValue = {
-    logs: state.logs,
+    logs,
     openLogs,
-    getLogsForSite: (siteId) => state.logs.filter((l) => l.siteId === siteId),
+    getLogsForSite: (siteId) => logs.filter((l) => l.siteId === siteId),
+
     addLog: (data) => {
-      const log: CraneLog = {
-        ...data,
-        id: `log-${Date.now()}`,
-        createdAt: new Date().toISOString(),
-      };
-      dispatch({ type: 'ADD_LOG', log });
+      const tempId = `temp-${Date.now()}`;
+      const optimistic: CraneLog = { ...data, id: tempId, createdAt: new Date().toISOString() };
+      setLogs((prev) => [optimistic, ...prev]);
+
+      supabase
+        .from('crane_logs')
+        .insert({
+          site_id:       data.siteId,
+          crane_id:      data.craneId,
+          company_id:    data.companyId ?? null,
+          status:        data.status,
+          job_details:   data.jobDetails,
+          image_uri:     data.imageUri ?? null,
+          start_time:    data.startTime,
+          end_time:      data.endTime ?? null,
+          is_open:       data.isOpen,
+          created_by_id: data.createdById,
+        })
+        .select()
+        .single()
+        .then(({ data: row, error }) => {
+          if (error) {
+            setLogs((prev) => prev.filter((l) => l.id !== tempId));
+            console.error('addLog:', error);
+            return;
+          }
+          setLogs((prev) => prev.map((l) => (l.id === tempId ? rowToLog(row) : l)));
+        });
     },
-    closeLog: (id, endTime) => dispatch({ type: 'CLOSE_LOG', id, endTime }),
+
+    closeLog: (id, endTime) => {
+      setLogs((prev) =>
+        prev.map((l) => (l.id === id ? { ...l, isOpen: false, endTime } : l))
+      );
+      supabase
+        .from('crane_logs')
+        .update({ is_open: false, end_time: endTime })
+        .eq('id', id)
+        .then(({ error }) => { if (error) console.error('closeLog:', error); });
+    },
   };
 
-  return (
-    <CraneLogsContext.Provider value={value}>{children}</CraneLogsContext.Provider>
-  );
+  return <CraneLogsContext.Provider value={value}>{children}</CraneLogsContext.Provider>;
 }
 
 export function useCraneLogs(): CraneLogsContextValue {

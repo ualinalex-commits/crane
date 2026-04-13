@@ -15,7 +15,6 @@ import { useBookings } from '@/lib/context/BookingsContext';
 import { useManagement } from '@/lib/context/ManagementContext';
 import { Typography, Spacing, Radius } from '@/lib/theme';
 import { BottomSheet } from '@/components/ui';
-import { getCraneById, getCompanyById } from '@/lib/mock';
 import type { Booking, Crane } from '@/lib/types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -400,7 +399,8 @@ function BookingBlock({
   onPress: () => void;
 }) {
   const { colors } = useTheme();
-  const company = getCompanyById(booking.companyId);
+  const { companies } = useManagement();
+  const company = companies.find((c) => c.id === booking.companyId);
   const compact = height < 40;
 
   return (
@@ -455,8 +455,9 @@ function BookingDetailSheet({
   onClose: () => void;
 }) {
   const { colors } = useTheme();
-  const crane = booking ? getCraneById(booking.craneId) : null;
-  const company = booking ? getCompanyById(booking.companyId) : null;
+  const { cranes, companies } = useManagement();
+  const crane = booking ? cranes.find((c) => c.id === booking.craneId) ?? null : null;
+  const company = booking ? companies.find((c) => c.id === booking.companyId) ?? null : null;
 
   return (
     <BottomSheet visible={booking !== null} onClose={onClose}>

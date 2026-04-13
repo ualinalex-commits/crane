@@ -12,7 +12,7 @@ import { useTheme } from '@/lib/hooks/useTheme';
 import { useManagement } from '@/lib/context/ManagementContext';
 import { Typography, Spacing, Radius, RoleConfig } from '@/lib/theme';
 import { Avatar } from '@/components/ui';
-import { mockSites } from '@/lib/mock';
+import { useAuth } from '@/lib/context/AuthContext';
 import type { UserRole } from '@/lib/types';
 
 const ROLES: { value: UserRole; icon: string }[] = [
@@ -27,6 +27,7 @@ export default function EditUserScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
   const { users, companies, updateUser, deactivateUser, reactivateUser } = useManagement();
+  const { availableSites } = useAuth();
 
   const user = users.find((u) => u.id === id);
 
@@ -164,7 +165,7 @@ export default function EditUserScreen() {
       {/* Site Access */}
       <Section label="Site Access">
         <View style={{ gap: Spacing.sm }}>
-          {mockSites.map((s) => {
+          {availableSites.map((s) => {
             const isSelected = siteIds.includes(s.id);
             return (
               <Pressable
