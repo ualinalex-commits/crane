@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -13,21 +13,21 @@ import { useTheme } from '@/lib/hooks/useTheme';
 import { useAuth } from '@/lib/context/AuthContext';
 import { useBookings } from '@/lib/context/BookingsContext';
 import { useManagement } from '@/lib/context/ManagementContext';
-import { Typography, Spacing, Radius, Shadow } from '@/lib/theme';
+import { Typography, Spacing, Radius } from '@/lib/theme';
 import { BottomSheet } from '@/components/ui';
 import { getCraneById, getCompanyById } from '@/lib/mock';
 import type { Booking, Crane } from '@/lib/types';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const LABEL_WIDTH = 108;
-const HOUR_WIDTH = 76;    // px per hour
-const START_HOUR = 6;     // 06:00
-const END_HOUR = 19;      // 19:00
-const LANE_HEIGHT = 68;
-const RULER_HEIGHT = 34;
-const TOTAL_HOURS = END_HOUR - START_HOUR;
-const TOTAL_WIDTH = TOTAL_HOURS * HOUR_WIDTH;
+const TIME_LABEL_WIDTH = 52;
+const COLUMN_WIDTH = 120;
+const HOUR_HEIGHT = 64;   // px per hour
+const HEADER_HEIGHT = 52; // crane name headers at top
+const START_HOUR = 6;
+const END_HOUR = 19;
+const TOTAL_HOURS = END_HOUR - START_HOUR;       // 13
+const TOTAL_HEIGHT = TOTAL_HOURS * HOUR_HEIGHT;  // 832
 const HOURS = Array.from({ length: TOTAL_HOURS + 1 }, (_, i) => START_HOUR + i);
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -36,9 +36,9 @@ function pad(n: number) {
   return String(n).padStart(2, '0');
 }
 
-function timeToX(time: string): number {
+function timeToY(time: string): number {
   const [h, m] = time.split(':').map(Number);
-  return ((h + m / 60) - START_HOUR) * HOUR_WIDTH;
+  return ((h + m / 60) - START_HOUR) * HOUR_HEIGHT;
 }
 
 function offsetDate(base: Date, delta: number): Date {
@@ -68,6 +68,7 @@ export default function TimelineScreen() {
   const { site } = useAuth();
   const { approvedBookings } = useBookings();
   const { getCranesForSite } = useManagement();
+  const scrollRef = useRef<ScrollView>(null);
 
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [detailBooking, setDetailBooking] = useState<Booking | null>(null);
@@ -81,16 +82,11 @@ export default function TimelineScreen() {
     [site?.id, getCranesForSite]
   );
 
-  // Bookings for the selected date at this site (approved only)
   const dayBookings = useMemo(
-    () =>
-      approvedBookings.filter(
-        (b) => b.siteId === site?.id && b.date === dateStr
-      ),
+    () => approvedBookings.filter((b) => b.siteId === site?.id && b.date === dateStr),
     [approvedBookings, site?.id, dateStr]
   );
 
-  // Group bookings by craneId
   const bookingsByCrane = useMemo(() => {
     const map: Record<string, Booking[]> = {};
     dayBookings.forEach((b) => {
@@ -100,10 +96,16 @@ export default function TimelineScreen() {
     return map;
   }, [dayBookings]);
 
-  // Current time X position (only relevant when isToday)
+  // Current time Y position
   const now = new Date();
-  const nowX = ((now.getHours() + now.getMinutes() / 60) - START_HOUR) * HOUR_WIDTH;
-  const showNow = isToday && nowX >= 0 && nowX <= TOTAL_WIDTH;
+  const nowY = ((now.getHours() + now.getMinutes() / 60) - START_HOUR) * HOUR_HEIGHT;
+  const showNow = isToday && nowY >= 0 && nowY <= TOTAL_HEIGHT;
+
+  // Scroll to current time on mount / date change
+  useEffect(() => {
+    const target = isToday && showNow ? Math.max(0, nowY - 120) : 0;
+    setTimeout(() => scrollRef.current?.scrollTo({ y: target, animated: isToday }), 250);
+  }, [dateStr]);
 
   const borderColor = colors.border;
   const gridColor = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)';
@@ -164,145 +166,168 @@ export default function TimelineScreen() {
           </Text>
         </View>
       ) : (
-        /* ── Timeline grid ── */
-        <View style={{ flex: 1, flexDirection: 'row' }}>
+        /* ── Vertical scroll: time axis + crane columns ── */
+        <ScrollView
+          ref={scrollRef}
+          style={{ flex: 1 }}
+          showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+        >
+          <View style={{ flexDirection: 'row' }}>
 
-          {/* Left: fixed crane labels */}
-          <View
-            style={{
-              width: LABEL_WIDTH,
-              borderRightWidth: StyleSheet.hairlineWidth,
-              borderRightColor: borderColor,
-            }}
-          >
-            {/* Ruler spacer */}
+            {/* Left: time labels — outside horizontal scroll so they stay pinned */}
             <View
               style={{
-                height: RULER_HEIGHT,
-                borderBottomWidth: StyleSheet.hairlineWidth,
-                borderBottomColor: borderColor,
+                width: TIME_LABEL_WIDTH,
+                borderRightWidth: StyleSheet.hairlineWidth,
+                borderRightColor: borderColor,
               }}
-            />
-            {/* Crane label rows */}
-            {cranes.map((crane, i) => (
-              <View
-                key={crane.id}
-                style={{
-                  height: LANE_HEIGHT,
-                  justifyContent: 'center',
-                  paddingHorizontal: Spacing.sm,
-                  borderBottomWidth: StyleSheet.hairlineWidth,
-                  borderBottomColor: borderColor,
-                }}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                  <View
-                    style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: crane.colour }}
-                  />
-                  <Text
-                    style={[Typography.bodySm, { color: colors.textPrimary, fontWeight: '600', flex: 1 }]}
-                    numberOfLines={1}
-                  >
-                    {crane.name}
-                  </Text>
-                </View>
-                <Text
-                  style={[{ fontSize: 10, color: colors.textTertiary, marginTop: 2 }]}
-                  numberOfLines={1}
-                >
-                  {crane.maxCapacityTonnes}t
-                </Text>
-              </View>
-            ))}
-          </View>
+            >
+              {/* Corner spacer aligns with crane header row */}
+              <View style={{ height: HEADER_HEIGHT }} />
 
-          {/* Right: horizontal scrollable grid */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ flex: 1 }}
-            contentContainerStyle={{ width: TOTAL_WIDTH }}
-          >
-            <View style={{ width: TOTAL_WIDTH }}>
-
-              {/* Time ruler */}
-              <View
-                style={{
-                  height: RULER_HEIGHT,
-                  flexDirection: 'row',
-                  borderBottomWidth: StyleSheet.hairlineWidth,
-                  borderBottomColor: borderColor,
-                }}
-              >
+              {/* Hour labels, absolutely positioned within the grid height */}
+              <View style={{ height: TOTAL_HEIGHT, position: 'relative' }}>
                 {HOURS.map((h) => (
-                  <View
+                  <Text
                     key={h}
-                    style={{
-                      width: HOUR_WIDTH,
-                      justifyContent: 'center',
-                      paddingLeft: 6,
-                      borderLeftWidth: h > START_HOUR ? StyleSheet.hairlineWidth : 0,
-                      borderLeftColor: borderColor,
-                    }}
+                    style={[
+                      Typography.label,
+                      {
+                        color: colors.textTertiary,
+                        fontVariant: ['tabular-nums'],
+                        position: 'absolute',
+                        top: (h - START_HOUR) * HOUR_HEIGHT - 8,
+                        right: Spacing.xs,
+                        textAlign: 'right',
+                      },
+                    ]}
                   >
-                    <Text
-                      style={[
-                        Typography.label,
-                        { color: colors.textTertiary, fontVariant: ['tabular-nums'] },
-                      ]}
-                    >
-                      {pad(h)}:00
-                    </Text>
-                  </View>
+                    {pad(h)}:00
+                  </Text>
                 ))}
               </View>
-
-              {/* Lane rows + now indicator */}
-              <View style={{ position: 'relative' }}>
-                {cranes.map((crane) => (
-                  <LaneRow
-                    key={crane.id}
-                    crane={crane}
-                    bookings={bookingsByCrane[crane.id] ?? []}
-                    gridColor={gridColor}
-                    borderColor={borderColor}
-                    onPressBooking={setDetailBooking}
-                  />
-                ))}
-
-                {/* Current time indicator */}
-                {showNow && (
-                  <View
-                    pointerEvents="none"
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      bottom: 0,
-                      left: nowX - 1,
-                      width: 2,
-                      backgroundColor: colors.danger,
-                    }}
-                  />
-                )}
-                {showNow && (
-                  <View
-                    pointerEvents="none"
-                    style={{
-                      position: 'absolute',
-                      top: -4,
-                      left: nowX - 5,
-                      width: 10,
-                      height: 10,
-                      borderRadius: 5,
-                      backgroundColor: colors.danger,
-                    }}
-                  />
-                )}
-              </View>
-
             </View>
-          </ScrollView>
-        </View>
+
+            {/* Right: crane headers + columns, horizontally scrollable */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={{ flex: 1 }}
+              bounces={false}
+            >
+              <View style={{ width: cranes.length * COLUMN_WIDTH }}>
+
+                {/* Crane name headers */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    height: HEADER_HEIGHT,
+                    borderBottomWidth: StyleSheet.hairlineWidth,
+                    borderBottomColor: borderColor,
+                  }}
+                >
+                  {cranes.map((crane, i) => (
+                    <View
+                      key={crane.id}
+                      style={{
+                        width: COLUMN_WIDTH,
+                        height: HEADER_HEIGHT,
+                        justifyContent: 'center',
+                        paddingHorizontal: Spacing.sm,
+                        borderLeftWidth: i > 0 ? StyleSheet.hairlineWidth : 0,
+                        borderLeftColor: borderColor,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <View
+                          style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: crane.colour }}
+                        />
+                        <Text
+                          style={[Typography.bodySm, { color: colors.textPrimary, fontWeight: '600', flex: 1 }]}
+                          numberOfLines={1}
+                        >
+                          {crane.name}
+                        </Text>
+                      </View>
+                      <Text
+                        style={{ fontSize: 10, color: colors.textTertiary, marginTop: 1 }}
+                        numberOfLines={1}
+                      >
+                        {crane.maxCapacityTonnes}t
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+
+                {/* Grid body: hour lines + crane columns + now indicator */}
+                <View style={{ flexDirection: 'row', height: TOTAL_HEIGHT, position: 'relative' }}>
+
+                  {/* Horizontal hour grid lines */}
+                  {HOURS.map((h) => (
+                    <View
+                      key={h}
+                      pointerEvents="none"
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        right: 0,
+                        top: (h - START_HOUR) * HOUR_HEIGHT,
+                        height: StyleSheet.hairlineWidth,
+                        backgroundColor: h === START_HOUR ? borderColor : gridColor,
+                      }}
+                    />
+                  ))}
+
+                  {/* Crane columns */}
+                  {cranes.map((crane, i) => (
+                    <CraneColumn
+                      key={crane.id}
+                      crane={crane}
+                      bookings={bookingsByCrane[crane.id] ?? []}
+                      borderColor={borderColor}
+                      showLeftBorder={i > 0}
+                      onPressBooking={setDetailBooking}
+                    />
+                  ))}
+
+                  {/* Current time indicator — horizontal red line */}
+                  {showNow && (
+                    <>
+                      <View
+                        pointerEvents="none"
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          right: 0,
+                          top: nowY - 1,
+                          height: 2,
+                          backgroundColor: colors.danger,
+                          zIndex: 10,
+                        }}
+                      />
+                      <View
+                        pointerEvents="none"
+                        style={{
+                          position: 'absolute',
+                          left: 0,
+                          top: nowY - 5,
+                          width: 10,
+                          height: 10,
+                          borderRadius: 5,
+                          backgroundColor: colors.danger,
+                          zIndex: 10,
+                        }}
+                      />
+                    </>
+                  )}
+                </View>
+
+              </View>
+            </ScrollView>
+
+          </View>
+        </ScrollView>
       )}
 
       {/* ── Booking detail sheet ── */}
@@ -314,58 +339,42 @@ export default function TimelineScreen() {
   );
 }
 
-// ── Lane row ──────────────────────────────────────────────────────────────────
+// ── Crane column ──────────────────────────────────────────────────────────────
 
-function LaneRow({
+function CraneColumn({
   crane,
   bookings,
-  gridColor,
   borderColor,
+  showLeftBorder,
   onPressBooking,
 }: {
   crane: Crane;
   bookings: Booking[];
-  gridColor: string;
   borderColor: string;
+  showLeftBorder: boolean;
   onPressBooking: (b: Booking) => void;
 }) {
   return (
     <View
       style={{
-        height: LANE_HEIGHT,
-        width: TOTAL_WIDTH,
+        width: COLUMN_WIDTH,
+        height: TOTAL_HEIGHT,
         position: 'relative',
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: borderColor,
+        borderLeftWidth: showLeftBorder ? StyleSheet.hairlineWidth : 0,
+        borderLeftColor: borderColor,
       }}
     >
-      {/* Hour grid lines */}
-      {HOURS.slice(1).map((h) => (
-        <View
-          key={h}
-          style={{
-            position: 'absolute',
-            top: 0,
-            bottom: 0,
-            left: (h - START_HOUR) * HOUR_WIDTH,
-            width: StyleSheet.hairlineWidth,
-            backgroundColor: gridColor,
-          }}
-        />
-      ))}
-
-      {/* Booking blocks */}
       {bookings.map((b) => {
-        const left = Math.max(0, timeToX(b.startTime));
-        const right = Math.min(TOTAL_WIDTH, timeToX(b.endTime));
-        const width = right - left;
-        if (width <= 4) return null;
+        const top = Math.max(0, timeToY(b.startTime));
+        const bottom = Math.min(TOTAL_HEIGHT, timeToY(b.endTime));
+        const height = bottom - top;
+        if (height <= 4) return null;
         return (
           <BookingBlock
             key={b.id}
             booking={b}
-            left={left}
-            width={width}
+            top={top}
+            height={height}
             craneColour={crane.colour}
             onPress={() => onPressBooking(b)}
           />
@@ -379,30 +388,30 @@ function LaneRow({
 
 function BookingBlock({
   booking,
-  left,
-  width,
+  top,
+  height,
   craneColour,
   onPress,
 }: {
   booking: Booking;
-  left: number;
-  width: number;
+  top: number;
+  height: number;
   craneColour: string;
   onPress: () => void;
 }) {
   const { colors } = useTheme();
   const company = getCompanyById(booking.companyId);
-  const compact = width < 80;
+  const compact = height < 40;
 
   return (
     <Pressable
       onPress={onPress}
       style={({ pressed }) => ({
         position: 'absolute',
-        top: 5,
-        bottom: 5,
-        left: left + 1,
-        width: width - 2,
+        top: top + 1,
+        left: 2,
+        right: 2,
+        height: height - 2,
         borderRadius: Radius.sm,
         borderCurve: 'continuous',
         backgroundColor: `${craneColour}22`,
@@ -411,6 +420,7 @@ function BookingBlock({
         overflow: 'hidden',
         justifyContent: 'center',
         paddingHorizontal: compact ? 4 : 6,
+        paddingTop: compact ? 0 : 4,
         opacity: pressed ? 0.75 : 1,
       })}
     >

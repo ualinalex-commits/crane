@@ -10,6 +10,7 @@ export default function TabLayout() {
   const colors = colorScheme === 'dark' ? Colors.dark : Colors.light;
 
   const isAP = user?.role === 'Appointed_Person';
+  const isSubcontractor = user?.role === 'Subcontractor';
   const canSeePending =
     user?.role === 'Appointed_Person' || user?.role === 'Subcontractor';
 
@@ -48,6 +49,7 @@ export default function TabLayout() {
         name="(logs)"
         options={{
           title: 'Crane Logs',
+          href: isSubcontractor ? null : undefined,
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons
               name="clipboard-list-outline"

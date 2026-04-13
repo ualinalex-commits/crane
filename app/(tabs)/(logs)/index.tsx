@@ -21,8 +21,9 @@ import type { CraneLog } from '@/lib/types';
 export default function CraneLogsScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { site } = useAuth();
+  const { site, user } = useAuth();
   const { getLogsForSite, closeLog } = useCraneLogs();
+  const isSlinger = user?.role === 'Slinger_Signaller';
 
   const [sheetVisible, setSheetVisible] = useState(false);
   const [closingLog, setClosingLog] = useState<CraneLog | null>(null);
@@ -91,7 +92,7 @@ export default function CraneLogsScreen() {
           <CraneLogCard
             log={item}
             onCloseLog={
-              item.isOpen
+              item.isOpen && !isSlinger
                 ? () => {
                     setClosingLog(item);
                     setCloseEndTime(new Date());
@@ -103,25 +104,27 @@ export default function CraneLogsScreen() {
         )}
       />
 
-      {/* FAB */}
-      <TouchableOpacity
-        onPress={() => setSheetVisible(true)}
-        style={{
-          position: 'absolute',
-          bottom: insets.bottom + Spacing.lg,
-          right: Spacing.lg,
-          width: 56,
-          height: 56,
-          borderRadius: 28,
-          backgroundColor: colors.accent,
-          alignItems: 'center',
-          justifyContent: 'center',
-          elevation: 4,
-          boxShadow: '0 4px 12px rgba(249,115,22,0.4)',
-        }}
-      >
-        <MaterialCommunityIcons name="plus" size={28} color="#FFFFFF" />
-      </TouchableOpacity>
+      {/* FAB — hidden for Slinger_Signaller */}
+      {!isSlinger && (
+        <TouchableOpacity
+          onPress={() => setSheetVisible(true)}
+          style={{
+            position: 'absolute',
+            bottom: insets.bottom + Spacing.lg,
+            right: Spacing.lg,
+            width: 56,
+            height: 56,
+            borderRadius: 28,
+            backgroundColor: colors.accent,
+            alignItems: 'center',
+            justifyContent: 'center',
+            elevation: 4,
+            boxShadow: '0 4px 12px rgba(249,115,22,0.4)',
+          }}
+        >
+          <MaterialCommunityIcons name="plus" size={28} color="#FFFFFF" />
+        </TouchableOpacity>
+      )}
 
       {/* Create log sheet */}
       <CraneLogSheet visible={sheetVisible} onClose={() => setSheetVisible(false)} />
