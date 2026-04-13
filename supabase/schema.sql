@@ -56,42 +56,6 @@ CREATE TYPE crane_log_status AS ENUM (
 
 
 -- =============================================================================
--- HELPER FUNCTIONS  (SECURITY DEFINER — bypass RLS for internal lookups)
--- =============================================================================
-
--- Returns the role of the current auth user.
--- Used in RLS policies to avoid recursive evaluation on the profiles table.
-CREATE OR REPLACE FUNCTION public.current_user_role()
-RETURNS user_role
-LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT role FROM public.profiles WHERE id = auth.uid()
-$$;
-
--- Returns true if the current user is assigned to the given site.
-CREATE OR REPLACE FUNCTION public.user_is_on_site(p_site_id uuid)
-RETURNS boolean
-LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM public.user_sites
-    WHERE user_id = auth.uid() AND site_id = p_site_id
-  )
-$$;
-
--- Returns the company_id of the current user (Subcontractors only).
-CREATE OR REPLACE FUNCTION public.current_user_company_id()
-RETURNS uuid
-LANGUAGE sql STABLE SECURITY DEFINER
-SET search_path = public
-AS $$
-  SELECT company_id FROM public.profiles WHERE id = auth.uid()
-$$;
-
-
--- =============================================================================
 -- TABLES
 -- =============================================================================
 
@@ -217,6 +181,43 @@ CREATE INDEX idx_crane_logs_is_open    ON public.crane_logs(is_open);
 CREATE INDEX idx_crane_logs_start_time ON public.crane_logs(start_time);
 CREATE INDEX idx_crane_logs_created_by ON public.crane_logs(created_by_id);
 CREATE INDEX idx_crane_logs_site_crane ON public.crane_logs(site_id, crane_id);
+
+
+-- =============================================================================
+-- HELPER FUNCTIONS  (SECURITY DEFINER — bypass RLS for internal lookups)
+-- Must be created AFTER tables so Postgres can resolve the references.
+-- =============================================================================
+
+-- Returns the role of the current auth user.
+-- Used in RLS policies to avoid recursive evaluation on the profiles table.
+CREATE OR REPLACE FUNCTION public.current_user_role()
+RETURNS user_role
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT role FROM public.profiles WHERE id = auth.uid()
+$$;
+
+-- Returns true if the current user is assigned to the given site.
+CREATE OR REPLACE FUNCTION public.user_is_on_site(p_site_id uuid)
+RETURNS boolean
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.user_sites
+    WHERE user_id = auth.uid() AND site_id = p_site_id
+  )
+$$;
+
+-- Returns the company_id of the current user (Subcontractors only).
+CREATE OR REPLACE FUNCTION public.current_user_company_id()
+RETURNS uuid
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT company_id FROM public.profiles WHERE id = auth.uid()
+$$;
 
 
 -- =============================================================================
