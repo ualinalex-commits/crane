@@ -36,31 +36,32 @@ export function BookingCard({
         borderCurve: 'continuous',
         borderWidth: 1,
         borderColor: colors.border,
-        padding: Spacing.lg,
-        gap: Spacing.md,
+        paddingHorizontal: Spacing.md,
+        paddingVertical: Spacing.sm,
+        gap: 6,
         opacity: pressed ? 0.85 : 1,
         ...Shadow.sm,
       })}
     >
       {/* Header row */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <View style={{ flex: 1, gap: 3 }}>
+        <View style={{ flex: 1, gap: 2 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
             {crane && (
               <View
                 style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: 5,
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
                   backgroundColor: crane.colour,
                 }}
               />
             )}
-            <Text style={[Typography.headingMd, { color: colors.textPrimary }]}>
+            <Text style={{ fontSize: 14, fontWeight: '600', letterSpacing: -0.1, color: colors.textPrimary }}>
               {crane?.name ?? 'Unknown Crane'}
             </Text>
           </View>
-          <Text style={[Typography.bodyMd, { color: colors.textSecondary }]}>
+          <Text style={[Typography.bodySm, { color: colors.textSecondary }]}>
             {company?.name ?? 'Unknown Company'}
           </Text>
         </View>
@@ -68,26 +69,26 @@ export function BookingCard({
       </View>
 
       {/* Time row */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.sm }}>
-        <MaterialCommunityIcons name="clock-outline" size={15} color={colors.textTertiary} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: Spacing.xs }}>
+        <MaterialCommunityIcons name="clock-outline" size={13} color={colors.textTertiary} />
         <Text
           style={[
-            Typography.bodyMd,
+            Typography.bodySm,
             { color: colors.textSecondary, fontVariant: ['tabular-nums'] },
           ]}
         >
           {booking.startTime} – {booking.endTime}
         </Text>
-        <Text style={[Typography.bodyMd, { color: colors.textTertiary }]}>·</Text>
-        <MaterialCommunityIcons name="calendar-outline" size={15} color={colors.textTertiary} />
-        <Text style={[Typography.bodyMd, { color: colors.textSecondary }]}>
+        <Text style={[Typography.bodySm, { color: colors.textTertiary }]}>·</Text>
+        <MaterialCommunityIcons name="calendar-outline" size={13} color={colors.textTertiary} />
+        <Text style={[Typography.bodySm, { color: colors.textSecondary }]}>
           {formatDate(booking.date)}
         </Text>
       </View>
 
       {/* Job details */}
       <Text
-        style={[Typography.bodyMd, { color: colors.textSecondary, lineHeight: 20 }]}
+        style={[Typography.bodySm, { color: colors.textSecondary, lineHeight: 17 }]}
         numberOfLines={2}
       >
         {booking.jobDetails}

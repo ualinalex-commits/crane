@@ -6,6 +6,7 @@ import {
   FlatList,
   TouchableOpacity,
   StyleSheet,
+  Dimensions,
 } from 'react-native';
 import { Calendar, CalendarProvider, WeekCalendar } from 'react-native-calendars';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,6 +23,7 @@ import type { Booking } from '@/lib/types';
 type ViewMode = 'month' | 'week';
 
 const TODAY = new Date().toISOString().split('T')[0];
+const CALENDAR_HEIGHT = Math.round(Dimensions.get('window').height * 0.33);
 
 function formatDisplayDate(dateStr: string): string {
   if (dateStr === TODAY) return 'Today';
@@ -101,15 +103,33 @@ export default function ApprovedBookingsScreen() {
       arrowColor: colors.accent,
       monthTextColor: colors.textPrimary,
       indicatorColor: colors.accent,
-      textDayFontSize: 14,
-      textMonthFontSize: 16,
-      textDayHeaderFontSize: 12,
+      textDayFontSize: 13,
+      textMonthFontSize: 14,
+      textDayHeaderFontSize: 11,
       textDayFontWeight: '400' as const,
       textMonthFontWeight: '700' as const,
       textDayHeaderFontWeight: '600' as const,
       'stylesheet.calendar.header': {
+        header: {
+          flexDirection: 'row',
+          justifyContent: 'space-between',
+          paddingLeft: 10,
+          paddingRight: 10,
+          marginTop: 4,
+          marginBottom: 2,
+          alignItems: 'center',
+        },
         week: {
-          marginTop: 0,
+          marginTop: 4,
+          marginBottom: 0,
+          flexDirection: 'row',
+          justifyContent: 'space-around',
+        },
+      },
+      'stylesheet.calendar.main': {
+        week: {
+          marginTop: 2,
+          marginBottom: 2,
           flexDirection: 'row',
           justifyContent: 'space-around',
         },
@@ -193,25 +213,32 @@ export default function ApprovedBookingsScreen() {
       </View>
 
       {/* ── Calendar ── */}
-      {viewMode === 'month' ? (
-        <Calendar
-          current={selectedDate}
-          onDayPress={(day) => setSelectedDate(day.dateString)}
-          markedDates={markedDates}
-          markingType="multi-dot"
-          theme={calendarTheme}
-          style={{ borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
-        />
-      ) : (
-        <CalendarProvider date={selectedDate} onDateChanged={(date) => setSelectedDate(date)}>
-          <WeekCalendar
+      <View
+        style={{
+          height: viewMode === 'month' ? CALENDAR_HEIGHT : undefined,
+          overflow: 'hidden',
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: colors.border,
+        }}
+      >
+        {viewMode === 'month' ? (
+          <Calendar
+            current={selectedDate}
+            onDayPress={(day) => setSelectedDate(day.dateString)}
             markedDates={markedDates}
             markingType="multi-dot"
             theme={calendarTheme}
-            style={{ borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.border }}
           />
-        </CalendarProvider>
-      )}
+        ) : (
+          <CalendarProvider date={selectedDate} onDateChanged={(date) => setSelectedDate(date)}>
+            <WeekCalendar
+              markedDates={markedDates}
+              markingType="multi-dot"
+              theme={calendarTheme}
+            />
+          </CalendarProvider>
+        )}
+      </View>
 
       {/* ── Day bookings ── */}
       <View
@@ -236,7 +263,8 @@ export default function ApprovedBookingsScreen() {
       <FlatList
         data={dayBookings}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={{ padding: Spacing.lg, gap: Spacing.md, flexGrow: 1 }}
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: Spacing.lg, gap: Spacing.sm, flexGrow: 1 }}
         ListEmptyComponent={
           <EmptyState
             icon="calendar-blank-outline"
