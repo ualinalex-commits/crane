@@ -14,9 +14,10 @@
 //   400 { error: "invalid_pin" }
 //   400 { error: "expired_pin" }
 //   500 { error: "internal_error" }
+//
+// Required env vars:
+//   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY  (auto-injected by Supabase)
 // =============================================================================
-
-import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -38,64 +39,121 @@ async function sha256hex(text: string): Promise<string> {
 }
 
 Deno.serve(async (req) => {
+  console.log('[verify-pin] handler called');
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: CORS });
   }
 
   try {
-    const { email, pin } = await req.json();
+    const body = await req.json();
+    const { email, pin } = body ?? {};
+
     if (!email || !pin || typeof email !== 'string' || typeof pin !== 'string') {
       return json({ error: 'invalid_pin' }, 400);
     }
 
     const normalised = email.toLowerCase().trim();
 
-    const admin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-      { auth: { autoRefreshToken: false, persistSession: false } },
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
+    const dbHeaders: Record<string, string> = {
+      'apikey': serviceKey,
+      'Authorization': `Bearer ${serviceKey}`,
+      'Content-Type': 'application/json',
+    };
+
+    // ── 1. Fetch profile with PIN fields ──────────────────────────────────
+    console.log('[verify-pin] looking up profile for:', normalised);
+
+    const profileRes = await fetch(
+      `${supabaseUrl}/rest/v1/profiles?email=eq.${encodeURIComponent(normalised)}&select=id,name,email,role,company_id,active,pin_hash,pin_expires_at`,
+      { headers: { ...dbHeaders, 'Accept': 'application/vnd.pgrst.object+json' } },
     );
 
-    // ── 1. Fetch profile with PIN fields and site assignments ─────────────
-    const { data: profile, error: profileError } = await admin
-      .from('profiles')
-      .select('id, name, email, role, company_id, active, pin_hash, pin_expires_at, user_sites(site_id)')
-      .eq('email', normalised)
-      .single();
+    console.log('[verify-pin] profile lookup status:', profileRes.status);
 
-    if (profileError || !profile || !profile.pin_hash) {
+    if (!profileRes.ok) {
+      const text = await profileRes.text();
+      console.error('[verify-pin] profile lookup failed:', profileRes.status, text);
+      return json({ error: 'invalid_pin' }, 400);
+    }
+
+    const profile = await profileRes.json();
+
+    if (!profile || !profile.pin_hash) {
+      console.log('[verify-pin] no profile or no pin_hash');
       return json({ error: 'invalid_pin' }, 400);
     }
 
     // ── 2. Check expiry ───────────────────────────────────────────────────
     if (!profile.pin_expires_at || new Date(profile.pin_expires_at) < new Date()) {
+      console.log('[verify-pin] PIN expired');
       return json({ error: 'expired_pin' }, 400);
     }
 
     // ── 3. Compare hashes ─────────────────────────────────────────────────
     const submittedHash = await sha256hex(pin.trim());
     if (submittedHash !== profile.pin_hash) {
+      console.log('[verify-pin] PIN hash mismatch');
       return json({ error: 'invalid_pin' }, 400);
     }
 
+    console.log('[verify-pin] PIN valid, invalidating');
+
     // ── 4. Invalidate PIN (one-time use) ──────────────────────────────────
-    await admin
-      .from('profiles')
-      .update({ pin_hash: null, pin_expires_at: null })
-      .eq('id', profile.id);
+    const invalidateRes = await fetch(
+      `${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(profile.id)}`,
+      {
+        method: 'PATCH',
+        headers: dbHeaders,
+        body: JSON.stringify({ pin_hash: null, pin_expires_at: null }),
+      },
+    );
 
-    // ── 5. Fetch sites for this user ──────────────────────────────────────
-    const siteIds = (profile.user_sites as { site_id: string }[]).map((us) => us.site_id);
+    if (!invalidateRes.ok) {
+      // Log but don't fail — the PIN was valid, let the user in
+      const text = await invalidateRes.text();
+      console.error('[verify-pin] PIN invalidation failed (non-fatal):', invalidateRes.status, text);
+    }
 
+    // ── 5. Fetch site assignments for this user ───────────────────────────
+    console.log('[verify-pin] fetching user_sites for profile:', profile.id);
+
+    const userSitesRes = await fetch(
+      `${supabaseUrl}/rest/v1/user_sites?profile_id=eq.${encodeURIComponent(profile.id)}&select=site_id`,
+      { headers: dbHeaders },
+    );
+
+    let siteIds: string[] = [];
+    if (userSitesRes.ok) {
+      const userSites: { site_id: string }[] = await userSitesRes.json();
+      siteIds = userSites.map((us) => us.site_id);
+    } else {
+      const text = await userSitesRes.text();
+      console.error('[verify-pin] user_sites lookup failed:', userSitesRes.status, text);
+    }
+
+    console.log('[verify-pin] siteIds:', siteIds);
+
+    // ── 6. Fetch site details ─────────────────────────────────────────────
     let sites: { id: string; name: string; location: string; address: string }[] = [];
     if (siteIds.length > 0) {
-      const { data, error: sitesError } = await admin
-        .from('sites')
-        .select('id, name, location, address')
-        .in('id', siteIds);
-      if (sitesError) throw sitesError;
-      sites = data ?? [];
+      const sitesRes = await fetch(
+        `${supabaseUrl}/rest/v1/sites?id=in.(${siteIds.join(',')})&select=id,name,location,address`,
+        { headers: dbHeaders },
+      );
+
+      if (sitesRes.ok) {
+        sites = await sitesRes.json();
+      } else {
+        const text = await sitesRes.text();
+        console.error('[verify-pin] sites lookup failed:', sitesRes.status, text);
+      }
     }
+
+    console.log('[verify-pin] success, returning user + sites');
 
     return json({
       user: {
@@ -107,10 +165,10 @@ Deno.serve(async (req) => {
         companyId: profile.company_id ?? undefined,
         active: profile.active,
       },
-      sites: sites ?? [],
+      sites,
     });
   } catch (err) {
-    console.error('[verify-pin]', err);
+    console.error('[verify-pin] unhandled error:', err);
     return json({ error: 'internal_error' }, 500);
   }
 });
