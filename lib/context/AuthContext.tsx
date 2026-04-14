@@ -10,7 +10,11 @@ interface AuthState {
 }
 
 interface AuthContextValue extends AuthState {
-  login: (email: string, password: string) => Promise<void>;
+  /** Step 1: send an 8-digit PIN to the given email address.
+   *  Throws `'not_found'` if the email is not in public.profiles. */
+  requestPin: (email: string) => Promise<void>;
+  /** Step 2: verify the PIN and establish a Supabase session. */
+  verifyPin: (email: string, pin: string) => Promise<void>;
   switchSite: (siteId: string) => void;
   logout: () => Promise<void>;
 }
@@ -85,16 +89,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const value: AuthContextValue = {
     ...state,
-    login: async (email, password) => {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+    requestPin: async (email) => {
+      const { data, error } = await supabase.functions.invoke('request-pin', {
+        body: { email: email.toLowerCase().trim() },
+      });
       if (error) throw error;
-      const { user, sites } = await fetchProfileAndSites(data.user.id);
-      setState({ user, site: sites[0] ?? null, availableSites: sites, loading: false });
+      if (data?.error === 'not_found') throw new Error('not_found');
+      if (data?.error) throw new Error(data.error);
     },
+
+    verifyPin: async (email, pin) => {
+      const { data, error } = await supabase.functions.invoke('verify-pin', {
+        body: { email: email.toLowerCase().trim(), pin: pin.trim() },
+      });
+      if (error) throw error;
+      if (data?.error === 'expired_pin') throw new Error('expired_pin');
+      if (data?.error === 'invalid_pin') throw new Error('invalid_pin');
+      if (data?.error) throw new Error(data.error);
+
+      // Exchange the magic-link token for a live session
+      const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
+        email: data.email,
+        token: data.token,
+        type: 'magiclink',
+      });
+      if (otpError) throw otpError;
+
+      const { user: profileUser, sites } = await fetchProfileAndSites(otpData.user!.id);
+      setState({ user: profileUser, site: sites[0] ?? null, availableSites: sites, loading: false });
+    },
+
     switchSite: (siteId) => {
       const site = state.availableSites.find((s) => s.id === siteId) ?? null;
       setState((s) => ({ ...s, site }));
     },
+
     logout: async () => {
       await supabase.auth.signOut();
       setState({ user: null, site: null, availableSites: [], loading: false });
