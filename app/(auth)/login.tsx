@@ -92,7 +92,7 @@ export default function LoginScreen() {
       } else if (e.message === 'invalid_pin') {
         setError('Incorrect PIN. Please try again.');
       } else {
-        setError('Something went wrong. Please try again.');
+        setError(e?.message ?? String(e));
       }
       setTimeout(() => pinInputRef.current?.focus(), 50);
     } finally {

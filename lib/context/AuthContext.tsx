@@ -75,12 +75,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (data?.error === 'invalid_pin') throw new Error('invalid_pin');
       if (data?.error) throw new Error(data.error);
 
-      console.log('verify-pin response:', JSON.stringify(data));
+      // DEBUG: surface raw response in UI so we can see it on mobile
+      throw new Error('DEBUG response: ' + JSON.stringify(data));
+      // eslint-disable-next-line no-unreachable
       const { user, sites } = data as { user: User; sites: Site[] };
       try {
         await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify({ user, sites }));
       } catch (storeErr) {
-        console.error('SecureStore.setItemAsync failed:', storeErr);
+        throw new Error('SecureStore failed: ' + String(storeErr));
       }
       setState({ user, site: sites[0] ?? null, availableSites: sites, loading: false });
     },
