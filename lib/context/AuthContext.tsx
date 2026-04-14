@@ -64,7 +64,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const { data, error } = await supabase.functions.invoke('verify-pin', {
         body: { email: email.toLowerCase().trim(), pin: pin.trim() },
       });
-      if (error) throw error;
+      if (error) {
+        // FunctionsHttpError carries the raw Response on .context — extract the
+        // app-level error code before falling back to a generic throw.
+        const body = await (error as any).context?.json().catch(() => null);
+        if (body?.error) throw new Error(body.error);
+        throw error;
+      }
       if (data?.error === 'expired_pin') throw new Error('expired_pin');
       if (data?.error === 'invalid_pin') throw new Error('invalid_pin');
       if (data?.error) throw new Error(data.error);

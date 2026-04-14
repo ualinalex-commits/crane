@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
     console.log('[verify-pin] fetching user_sites for profile:', profile.id);
 
     const userSitesRes = await fetch(
-      `${supabaseUrl}/rest/v1/user_sites?profile_id=eq.${encodeURIComponent(profile.id)}&select=site_id`,
+      `${supabaseUrl}/rest/v1/user_sites?user_id=eq.${encodeURIComponent(profile.id)}&select=site_id`,
       { headers: dbHeaders },
     );
 

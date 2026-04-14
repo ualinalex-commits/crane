@@ -15,7 +15,7 @@
 //   500 { error: "internal_error" }
 //
 // Required env vars:
-//   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY  (auto-injected by Supabase)
+//   SUPABASE_URL, SERVICE_ROLE_KEY
 //   RESEND_API_KEY
 //   RESEND_FROM  (e.g. "Crane App <noreply@yourdomain.com>")
 // =============================================================================
@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
     const normalised = email.toLowerCase().trim();
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const serviceKey = Deno.env.get('SERVICE_ROLE_KEY')!;
 
     const dbHeaders: Record<string, string> = {
       'apikey': serviceKey,
@@ -100,19 +100,29 @@ Deno.serve(async (req) => {
 
     console.log('[request-pin] storing PIN hash for profile:', profile.id);
 
+    const patchUrl = `${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(profile.id)}`;
+    console.log('[request-pin] PATCH URL:', patchUrl);
+
     const updateRes = await fetch(
-      `${supabaseUrl}/rest/v1/profiles?id=eq.${encodeURIComponent(profile.id)}`,
+      patchUrl,
       {
         method: 'PATCH',
-        headers: dbHeaders,
+        headers: { ...dbHeaders, 'Prefer': 'return=representation' },
         body: JSON.stringify({ pin_hash: pinHash, pin_expires_at: expiresAt }),
       },
     );
 
+    const updateText = await updateRes.text();
+    console.log('[request-pin] PATCH status:', updateRes.status, 'body:', updateText);
+
     if (!updateRes.ok) {
-      const text = await updateRes.text();
-      console.error('[request-pin] profile update failed:', updateRes.status, text);
-      throw new Error(`Profile update failed (${updateRes.status}): ${text}`);
+      console.error('[request-pin] profile update failed:', updateRes.status, updateText);
+      throw new Error(`Profile update failed (${updateRes.status}): ${updateText}`);
+    }
+
+    if (updateText === '[]' || updateText === '') {
+      console.error('[request-pin] PATCH matched 0 rows — profile.id may not exist in DB:', profile.id);
+      throw new Error('Profile update matched no rows');
     }
 
     console.log('[request-pin] PIN stored, sending email');
