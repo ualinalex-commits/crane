@@ -76,9 +76,15 @@ export default function LoginScreen() {
     setPinExpired(false);
     setLoading(true);
     try {
-      await verifyPin(email.trim(), digits);
+      console.log('[verifyPin] calling with email:', email.trim(), 'pin length:', digits.length);
+      const result = await verifyPin(email.trim(), digits);
+      console.log('[verifyPin] success, result:', result);
       // Navigation handled by the useEffect above
     } catch (e: any) {
+      console.log('[verifyPin] error caught:', e);
+      console.log('[verifyPin] error.message:', e?.message);
+      console.log('[verifyPin] error.code:', e?.code);
+      console.log('[verifyPin] full error JSON:', JSON.stringify(e, null, 2));
       setPin('');
       if (e.message === 'expired_pin') {
         setPinExpired(true);
@@ -303,14 +309,34 @@ export default function LoginScreen() {
                 </Text>
               </View>
 
-              {/* PIN boxes */}
-              <PinBoxes
-                ref={pinInputRef}
-                value={pin}
-                onChange={handlePinChange}
-                disabled={loading}
-                colors={colors}
-              />
+              {/* PIN input */}
+              <View style={{ gap: Spacing.xs }}>
+                <Text style={[Typography.bodySm, { color: colors.textSecondary }]}>
+                  PIN
+                </Text>
+                <TextInput
+                  ref={pinInputRef}
+                  value={pin}
+                  onChangeText={handlePinChange}
+                  placeholder="Enter 8-digit PIN"
+                  placeholderTextColor={colors.textTertiary}
+                  keyboardType="number-pad"
+                  maxLength={8}
+                  editable={!loading}
+                  secureTextEntry
+                  style={{
+                    height: 52,
+                    borderRadius: Radius.md,
+                    borderCurve: 'continuous',
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    backgroundColor: colors.surfaceRaised,
+                    paddingHorizontal: Spacing.lg,
+                    color: colors.textPrimary,
+                    ...Typography.bodyMd,
+                  }}
+                />
+              </View>
 
               {/* Error banner */}
               {error && <ErrorBanner message={error} />}
@@ -391,75 +417,6 @@ export default function LoginScreen() {
     </SafeAreaView>
   );
 }
-
-// ─── PinBoxes ─────────────────────────────────────────────────────────────────
-
-interface PinBoxesProps {
-  value: string;
-  onChange: (text: string) => void;
-  disabled: boolean;
-  colors: ReturnType<typeof useTheme>['colors'];
-}
-
-const PinBoxes = React.forwardRef<TextInput, PinBoxesProps>(
-  ({ value, onChange, disabled, colors }, ref) => {
-    return (
-      <Pressable
-        onPress={() => (ref as React.RefObject<TextInput>)?.current?.focus()}
-        style={{ flexDirection: 'row', gap: Spacing.sm, justifyContent: 'center' }}
-      >
-        {Array.from({ length: PIN_LENGTH }).map((_, i) => {
-          const isFocused = value.length === i && !disabled;
-          const isFilled  = i < value.length;
-          return (
-            <View
-              key={i}
-              style={{
-                width: 36,
-                height: 48,
-                borderRadius: Radius.md,
-                borderCurve: 'continuous',
-                borderWidth: isFocused ? 2 : 1.5,
-                borderColor: isFocused
-                  ? colors.accent
-                  : isFilled
-                  ? colors.textSecondary
-                  : colors.border,
-                backgroundColor: colors.surfaceRaised,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              {isFilled && (
-                <Text
-                  style={[Typography.headingMd, { color: colors.textPrimary, fontSize: 20 }]}
-                >
-                  •
-                </Text>
-              )}
-            </View>
-          );
-        })}
-
-        {/* Hidden input captures all keystrokes */}
-        <TextInput
-          ref={ref}
-          value={value}
-          onChangeText={onChange}
-          keyboardType="number-pad"
-          maxLength={PIN_LENGTH}
-          editable={!disabled}
-          style={{
-            position: 'absolute',
-            width: '100%',
-            height: '100%',
-            opacity: 0,
-          }}
-        />
-      </Pressable>
-    );
-  },
-);
 
 // ─── SiteCard ─────────────────────────────────────────────────────────────────
 
