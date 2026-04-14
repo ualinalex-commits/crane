@@ -16,7 +16,7 @@
 //   500 { error: "internal_error" }
 // =============================================================================
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'npm:@supabase/supabase-js@2';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -87,12 +87,15 @@ Deno.serve(async (req) => {
     // ── 5. Fetch sites for this user ──────────────────────────────────────
     const siteIds = (profile.user_sites as { site_id: string }[]).map((us) => us.site_id);
 
-    const { data: sites, error: sitesError } = await admin
-      .from('sites')
-      .select('id, name, location, address')
-      .in('id', siteIds);
-
-    if (sitesError) throw sitesError;
+    let sites: { id: string; name: string; location: string; address: string }[] = [];
+    if (siteIds.length > 0) {
+      const { data, error: sitesError } = await admin
+        .from('sites')
+        .select('id, name, location, address')
+        .in('id', siteIds);
+      if (sitesError) throw sitesError;
+      sites = data ?? [];
+    }
 
     return json({
       user: {
