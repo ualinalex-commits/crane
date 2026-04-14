@@ -6,11 +6,11 @@
 // 1. Looks up the profile by email and fetches its stored PIN hash + expiry.
 // 2. Checks the PIN hasn't expired.
 // 3. Hashes the submitted PIN and compares to the stored hash.
-// 4. On success: clears the PIN (one-time use) and generates a magic-link
-//    token so the client can establish a Supabase session.
+// 4. On success: clears the PIN (one-time use) and returns the full user
+//    profile and assigned sites so the client can store them locally.
 //
 // Returns:
-//   200 { token: string, email: string }  — client calls verifyOtp with these
+//   200 { user: User, sites: Site[] }
 //   400 { error: "invalid_pin" }
 //   400 { error: "expired_pin" }
 //   500 { error: "internal_error" }
@@ -56,10 +56,10 @@ Deno.serve(async (req) => {
       { auth: { autoRefreshToken: false, persistSession: false } },
     );
 
-    // ── 1. Fetch stored hash + expiry ─────────────────────────────────────
+    // ── 1. Fetch profile with PIN fields and site assignments ─────────────
     const { data: profile, error: profileError } = await admin
       .from('profiles')
-      .select('id, email, pin_hash, pin_expires_at')
+      .select('id, name, email, role, company_id, active, pin_hash, pin_expires_at, user_sites(site_id)')
       .eq('email', normalised)
       .single();
 
@@ -84,19 +84,27 @@ Deno.serve(async (req) => {
       .update({ pin_hash: null, pin_expires_at: null })
       .eq('id', profile.id);
 
-    // ── 5. Generate magic-link token for client session creation ──────────
-    const { data: linkData, error: linkError } = await admin.auth.admin.generateLink({
-      type: 'magiclink',
-      email: profile.email,
-    });
+    // ── 5. Fetch sites for this user ──────────────────────────────────────
+    const siteIds = (profile.user_sites as { site_id: string }[]).map((us) => us.site_id);
 
-    if (linkError || !linkData?.properties?.hashed_token) {
-      throw linkError ?? new Error('generateLink returned no token');
-    }
+    const { data: sites, error: sitesError } = await admin
+      .from('sites')
+      .select('id, name, location, address')
+      .in('id', siteIds);
+
+    if (sitesError) throw sitesError;
 
     return json({
-      token: linkData.properties.hashed_token,
-      email: profile.email,
+      user: {
+        id: profile.id,
+        name: profile.name,
+        email: profile.email,
+        role: profile.role,
+        siteIds,
+        companyId: profile.company_id ?? undefined,
+        active: profile.active,
+      },
+      sites: sites ?? [],
     });
   } catch (err) {
     console.error('[verify-pin]', err);

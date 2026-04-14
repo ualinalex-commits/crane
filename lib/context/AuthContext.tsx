@@ -1,6 +1,9 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import * as SecureStore from 'expo-secure-store';
 import { supabase } from '../supabase';
 import type { User, Site } from '../types';
+
+const STORAGE_KEY = 'crane_session';
 
 interface AuthState {
   user: User | null;
@@ -13,42 +16,10 @@ interface AuthContextValue extends AuthState {
   /** Step 1: send an 8-digit PIN to the given email address.
    *  Throws `'not_found'` if the email is not in public.profiles. */
   requestPin: (email: string) => Promise<void>;
-  /** Step 2: verify the PIN and establish a Supabase session. */
+  /** Step 2: verify the PIN; stores the user profile locally on success. */
   verifyPin: (email: string, pin: string) => Promise<void>;
   switchSite: (siteId: string) => void;
   logout: () => Promise<void>;
-}
-
-async function fetchProfileAndSites(userId: string): Promise<{ user: User; sites: Site[] }> {
-  const { data: profile, error } = await supabase
-    .from('profiles')
-    .select('id, name, email, role, company_id, active, user_sites(site_id)')
-    .eq('id', userId)
-    .single();
-
-  if (error || !profile) throw error ?? new Error('Profile not found');
-
-  const siteIds = (profile.user_sites as { site_id: string }[]).map((us) => us.site_id);
-
-  const { data: sites, error: sitesError } = await supabase
-    .from('sites')
-    .select('*')
-    .in('id', siteIds);
-
-  if (sitesError) throw sitesError;
-
-  return {
-    user: {
-      id: profile.id,
-      name: profile.name,
-      email: profile.email,
-      role: profile.role,
-      siteIds,
-      companyId: profile.company_id ?? undefined,
-      active: profile.active,
-    },
-    sites: (sites ?? []) as Site[],
-  };
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -61,30 +32,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading: true,
   });
 
-  // Restore session on app launch
+  // Restore session from secure storage on app launch
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        try {
-          const { user, sites } = await fetchProfileAndSites(session.user.id);
+    SecureStore.getItemAsync(STORAGE_KEY)
+      .then((raw) => {
+        if (raw) {
+          const { user, sites } = JSON.parse(raw) as { user: User; sites: Site[] };
           setState({ user, site: sites[0] ?? null, availableSites: sites, loading: false });
-        } catch {
+        } else {
           setState((s) => ({ ...s, loading: false }));
         }
-      } else {
+      })
+      .catch(() => {
         setState((s) => ({ ...s, loading: false }));
-      }
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_OUT') {
-        setState({ user: null, site: null, availableSites: [], loading: false });
-      }
-    });
-
-    return () => subscription.unsubscribe();
+      });
   }, []);
 
   const value: AuthContextValue = {
@@ -108,16 +69,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (data?.error === 'invalid_pin') throw new Error('invalid_pin');
       if (data?.error) throw new Error(data.error);
 
-      // Exchange the magic-link token for a live session
-      const { data: otpData, error: otpError } = await supabase.auth.verifyOtp({
-        email: data.email,
-        token: data.token,
-        type: 'magiclink',
-      });
-      if (otpError) throw otpError;
-
-      const { user: profileUser, sites } = await fetchProfileAndSites(otpData.user!.id);
-      setState({ user: profileUser, site: sites[0] ?? null, availableSites: sites, loading: false });
+      const { user, sites } = data as { user: User; sites: Site[] };
+      await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify({ user, sites }));
+      setState({ user, site: sites[0] ?? null, availableSites: sites, loading: false });
     },
 
     switchSite: (siteId) => {
@@ -126,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
 
     logout: async () => {
-      await supabase.auth.signOut();
+      await SecureStore.deleteItemAsync(STORAGE_KEY);
       setState({ user: null, site: null, availableSites: [], loading: false });
     },
   };
