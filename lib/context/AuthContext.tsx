@@ -1,7 +1,32 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { supabase } from '../supabase';
 import type { User, Site } from '../types';
+
+// SecureStore is native-only; fall back to localStorage on web.
+const storage = {
+  async getItem(key: string): Promise<string | null> {
+    if (Platform.OS === 'web') {
+      return localStorage.getItem(key);
+    }
+    return SecureStore.getItemAsync(key);
+  },
+  async setItem(key: string, value: string): Promise<void> {
+    if (Platform.OS === 'web') {
+      localStorage.setItem(key, value);
+      return;
+    }
+    await SecureStore.setItemAsync(key, value);
+  },
+  async deleteItem(key: string): Promise<void> {
+    if (Platform.OS === 'web') {
+      localStorage.removeItem(key);
+      return;
+    }
+    await SecureStore.deleteItemAsync(key);
+  },
+};
 
 const STORAGE_KEY = 'crane_session';
 
@@ -32,9 +57,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loading: true,
   });
 
-  // Restore session from secure storage on app launch
+  // Restore session from storage on app launch
   useEffect(() => {
-    SecureStore.getItemAsync(STORAGE_KEY)
+    storage.getItem(STORAGE_KEY)
       .then((raw) => {
         if (raw) {
           const { user, sites } = JSON.parse(raw) as { user: User; sites: Site[] };
@@ -75,15 +100,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (data?.error === 'invalid_pin') throw new Error('invalid_pin');
       if (data?.error) throw new Error(data.error);
 
-      // DEBUG: surface raw response in UI so we can see it on mobile
-      throw new Error('DEBUG response: ' + JSON.stringify(data));
-      // eslint-disable-next-line no-unreachable
       const { user, sites } = data as { user: User; sites: Site[] };
-      try {
-        await SecureStore.setItemAsync(STORAGE_KEY, JSON.stringify({ user, sites }));
-      } catch (storeErr) {
-        throw new Error('SecureStore failed: ' + String(storeErr));
-      }
+      await storage.setItem(STORAGE_KEY, JSON.stringify({ user, sites }));
       setState({ user, site: sites[0] ?? null, availableSites: sites, loading: false });
     },
 
@@ -93,7 +111,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     },
 
     logout: async () => {
-      await SecureStore.deleteItemAsync(STORAGE_KEY);
+      await storage.deleteItem(STORAGE_KEY);
       setState({ user: null, site: null, availableSites: [], loading: false });
     },
   };
