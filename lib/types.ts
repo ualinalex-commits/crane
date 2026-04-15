@@ -1,4 +1,5 @@
 export type UserRole =
+  | 'Admin'
   | 'Appointed_Person'
   | 'Crane_Supervisor'
   | 'Crane_Operator'

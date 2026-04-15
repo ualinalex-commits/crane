@@ -6,7 +6,9 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
+  Alert,
 } from 'react-native';
+
 import { useLocalSearchParams, router } from 'expo-router';
 import { useTheme } from '@/lib/hooks/useTheme';
 import { useManagement } from '@/lib/context/ManagementContext';
@@ -28,7 +30,8 @@ const COLOUR_OPTIONS = [
 export default function EditCraneScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
-  const { cranes, updateCrane, deactivateCrane, reactivateCrane } = useManagement();
+  const { cranes, updateCrane, deactivateCrane, reactivateCrane, deleteCrane } = useManagement();
+
 
   const crane = cranes.find((c) => c.id === id);
 
@@ -69,6 +72,24 @@ export default function EditCraneScreen() {
       reactivateCrane(crane!.id);
     }
     router.back();
+  }
+
+  function handleDelete() {
+    Alert.alert(
+      'Delete Crane',
+      `Are you sure you want to delete ${crane!.name}? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            deleteCrane(crane!.id);
+            router.back();
+          },
+        },
+      ]
+    );
   }
 
   return (
@@ -169,7 +190,7 @@ export default function EditCraneScreen() {
           borderRadius: Radius.lg,
           borderCurve: 'continuous',
           borderWidth: 1.5,
-          borderColor: crane.active ? colors.danger : colors.success,
+          borderColor: crane.active ? colors.warning : colors.success,
           alignItems: 'center',
           justifyContent: 'center',
           opacity: pressed ? 0.7 : 1,
@@ -178,10 +199,29 @@ export default function EditCraneScreen() {
         <Text
           style={[
             Typography.bodySemibold,
-            { color: crane.active ? colors.danger : colors.success, fontSize: 16 },
+            { color: crane.active ? colors.warning : colors.success, fontSize: 16 },
           ]}
         >
           {crane.active ? 'Deactivate Crane' : 'Reactivate Crane'}
+        </Text>
+      </Pressable>
+
+      {/* Delete */}
+      <Pressable
+        onPress={handleDelete}
+        style={({ pressed }) => ({
+          height: 52,
+          borderRadius: Radius.lg,
+          borderCurve: 'continuous',
+          borderWidth: 1.5,
+          borderColor: colors.danger,
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: pressed ? 0.7 : 1,
+        })}
+      >
+        <Text style={[Typography.bodySemibold, { color: colors.danger, fontSize: 16 }]}>
+          Delete Crane
         </Text>
       </Pressable>
     </ScrollView>

@@ -9,10 +9,8 @@ export default function TabLayout() {
   const colorScheme = useColorScheme();
   const colors = colorScheme === 'dark' ? Colors.dark : Colors.light;
 
+  const isAdmin = user?.role === 'Admin';
   const isAP = user?.role === 'Appointed_Person';
-  const isSubcontractor = user?.role === 'Subcontractor';
-  const canSeePending =
-    user?.role === 'Appointed_Person' || user?.role === 'Subcontractor';
 
   return (
     <Tabs
@@ -31,16 +29,26 @@ export default function TabLayout() {
         },
       }}
     >
+      {/* Admin-only tab */}
+      <Tabs.Screen
+        name="(admin)"
+        options={{
+          title: 'Admin',
+          href: isAdmin ? undefined : null,
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="shield-crown-outline" size={size} color={color} />
+          ),
+        }}
+      />
+
+      {/* Standard tabs — hidden for Admin */}
       <Tabs.Screen
         name="(bookings)"
         options={{
           title: 'Bookings',
+          href: isAdmin ? null : undefined,
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons
-              name="calendar-check-outline"
-              size={size}
-              color={color}
-            />
+            <MaterialCommunityIcons name="calendar-check-outline" size={size} color={color} />
           ),
         }}
       />
@@ -49,13 +57,9 @@ export default function TabLayout() {
         name="(logs)"
         options={{
           title: 'Crane Logs',
-          href: isSubcontractor ? null : undefined,
+          href: isAdmin || user?.role === 'Subcontractor' ? null : undefined,
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons
-              name="clipboard-list-outline"
-              size={size}
-              color={color}
-            />
+            <MaterialCommunityIcons name="clipboard-list-outline" size={size} color={color} />
           ),
         }}
       />
@@ -64,13 +68,9 @@ export default function TabLayout() {
         name="(pending)"
         options={{
           title: 'Pending',
-          href: canSeePending ? undefined : null,
+          href: isAdmin ? null : undefined,
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons
-              name="clock-outline"
-              size={size}
-              color={color}
-            />
+            <MaterialCommunityIcons name="clock-outline" size={size} color={color} />
           ),
         }}
       />
@@ -79,12 +79,9 @@ export default function TabLayout() {
         name="(timeline)"
         options={{
           title: 'Timeline',
+          href: isAdmin ? null : undefined,
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons
-              name="timeline-outline"
-              size={size}
-              color={color}
-            />
+            <MaterialCommunityIcons name="timeline-outline" size={size} color={color} />
           ),
         }}
       />
@@ -95,11 +92,7 @@ export default function TabLayout() {
           title: 'Management',
           href: isAP ? undefined : null,
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons
-              name="cog-outline"
-              size={size}
-              color={color}
-            />
+            <MaterialCommunityIcons name="cog-outline" size={size} color={color} />
           ),
         }}
       />

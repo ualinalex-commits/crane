@@ -14,8 +14,8 @@ import { useAuth } from '@/lib/context/AuthContext';
 import { Typography, Spacing, Radius, RoleConfig } from '@/lib/theme';
 import type { UserRole } from '@/lib/types';
 
+// AP manages operatives only — not other APs or Admins
 const ROLES: { value: UserRole; icon: string }[] = [
-  { value: 'Appointed_Person', icon: 'account-star-outline' },
   { value: 'Crane_Supervisor', icon: 'account-hard-hat-outline' },
   { value: 'Crane_Operator', icon: 'crane' },
   { value: 'Slinger_Signaller', icon: 'hand-wave-outline' },
@@ -24,37 +24,29 @@ const ROLES: { value: UserRole; icon: string }[] = [
 
 export default function NewUserScreen() {
   const { colors } = useTheme();
-  const { site, availableSites } = useAuth();
+  const { site } = useAuth();
   const { addUser, companies } = useManagement();
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<UserRole>('Crane_Operator');
-  const [siteIds, setSiteIds] = useState<string[]>(site ? [site.id] : []);
   const [companyId, setCompanyId] = useState<string>('');
 
   const activeCompanies = companies.filter((c) => c.active);
-
   const isSubcontractor = role === 'Subcontractor';
+
   const canSubmit =
     name.trim().length > 0 &&
     email.trim().length > 0 &&
-    siteIds.length > 0 &&
     (!isSubcontractor || companyId.length > 0);
-
-  function toggleSite(id: string) {
-    setSiteIds((prev) =>
-      prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]
-    );
-  }
 
   function handleSubmit() {
     if (!canSubmit) return;
     addUser({
       name: name.trim(),
-      email: email.trim(),
+      email: email.trim().toLowerCase(),
       role,
-      siteIds,
+      siteIds: site ? [site.id] : [],
       companyId: isSubcontractor ? companyId : undefined,
       active: true,
     });
@@ -149,87 +141,53 @@ export default function NewUserScreen() {
         </View>
       </Section>
 
-      <Section label="Site Access">
-        <View style={{ gap: Spacing.sm }}>
-          {availableSites.map((s) => {
-            const isSelected = siteIds.includes(s.id);
-            return (
-              <Pressable
-                key={s.id}
-                onPress={() => toggleSite(s.id)}
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: Spacing.md,
-                  padding: Spacing.md,
-                  borderRadius: Radius.md,
-                  borderCurve: 'continuous',
-                  borderWidth: 1.5,
-                  borderColor: isSelected ? colors.accent : colors.border,
-                  backgroundColor: isSelected ? colors.accentSubtle : colors.surface,
-                  opacity: pressed ? 0.8 : 1,
-                })}
-              >
-                <MaterialCommunityIcons
-                  name={isSelected ? 'checkbox-marked-circle' : 'checkbox-blank-circle-outline'}
-                  size={20}
-                  color={isSelected ? colors.accent : colors.textTertiary}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={[Typography.bodySemibold, { color: colors.textPrimary }]}>
-                    {s.name}
-                  </Text>
-                  <Text style={[Typography.bodySm, { color: colors.textSecondary }]}>
-                    {s.location}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
-      </Section>
-
       {isSubcontractor && (
         <Section label="Company">
           <View style={{ gap: Spacing.sm }}>
-            {activeCompanies.map((company) => {
-              const isSelected = companyId === company.id;
-              return (
-                <Pressable
-                  key={company.id}
-                  onPress={() => setCompanyId(company.id)}
-                  style={({ pressed }) => ({
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: Spacing.md,
-                    padding: Spacing.md,
-                    borderRadius: Radius.md,
-                    borderCurve: 'continuous',
-                    borderWidth: 1.5,
-                    borderColor: isSelected ? colors.accent : colors.border,
-                    backgroundColor: isSelected ? colors.accentSubtle : colors.surface,
-                    opacity: pressed ? 0.8 : 1,
-                  })}
-                >
-                  <MaterialCommunityIcons
-                    name="office-building-outline"
-                    size={18}
-                    color={isSelected ? colors.accent : colors.textSecondary}
-                  />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[Typography.bodySemibold, { color: colors.textPrimary }]}>
-                      {company.name}
-                    </Text>
-                    <Text style={[Typography.bodySm, { color: colors.textSecondary }]}>
-                      {company.contactName}
-                    </Text>
-                  </View>
-                  {isSelected && (
-                    <MaterialCommunityIcons name="check-circle" size={20} color={colors.accent} />
-                  )}
-                </Pressable>
-              );
-            })}
+            {activeCompanies.length === 0 ? (
+              <Text style={[Typography.bodySm, { color: colors.textTertiary }]}>
+                No active companies. Add a subcontractor company first.
+              </Text>
+            ) : (
+              activeCompanies.map((company) => {
+                const isSelected = companyId === company.id;
+                return (
+                  <Pressable
+                    key={company.id}
+                    onPress={() => setCompanyId(company.id)}
+                    style={({ pressed }) => ({
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: Spacing.md,
+                      padding: Spacing.md,
+                      borderRadius: Radius.md,
+                      borderCurve: 'continuous',
+                      borderWidth: 1.5,
+                      borderColor: isSelected ? colors.accent : colors.border,
+                      backgroundColor: isSelected ? colors.accentSubtle : colors.surface,
+                      opacity: pressed ? 0.8 : 1,
+                    })}
+                  >
+                    <MaterialCommunityIcons
+                      name="office-building-outline"
+                      size={18}
+                      color={isSelected ? colors.accent : colors.textSecondary}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[Typography.bodySemibold, { color: colors.textPrimary }]}>
+                        {company.name}
+                      </Text>
+                      <Text style={[Typography.bodySm, { color: colors.textSecondary }]}>
+                        {company.contactName}
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <MaterialCommunityIcons name="check-circle" size={20} color={colors.accent} />
+                    )}
+                  </Pressable>
+                );
+              })
+            )}
           </View>
         </Section>
       )}
@@ -260,8 +218,6 @@ export default function NewUserScreen() {
   );
 }
 
-// ── Shared sub-components ─────────────────────────────────────────────────────
-
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   const { colors } = useTheme();
   return (
@@ -283,7 +239,7 @@ function FieldInput({
   value: string;
   onChangeText: (v: string) => void;
   placeholder: string;
-  keyboardType?: 'default' | 'numeric' | 'email-address';
+  keyboardType?: 'default' | 'email-address';
   autoCapitalize?: 'none' | 'words' | 'sentences';
   colors: ReturnType<typeof useTheme>['colors'];
 }) {

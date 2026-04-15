@@ -120,6 +120,11 @@ export const RoleConfig: Record<
   string,
   { label: string; shortLabel: string; colour: string }
 > = {
+  Admin: {
+    label: 'Admin',
+    shortLabel: 'AD',
+    colour: '#DC2626',
+  },
   Appointed_Person: {
     label: 'Appointed Person',
     shortLabel: 'AP',

@@ -6,6 +6,7 @@ import {
   TextInput,
   Pressable,
   StyleSheet,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useTheme } from '@/lib/hooks/useTheme';
@@ -15,7 +16,7 @@ import { Typography, Spacing, Radius } from '@/lib/theme';
 export default function EditSubcontractorScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
-  const { companies, updateCompany, deactivateCompany, reactivateCompany } = useManagement();
+  const { companies, updateCompany, deactivateCompany, reactivateCompany, deleteCompany } = useManagement();
 
   const company = companies.find((c) => c.id === id);
 
@@ -56,6 +57,24 @@ export default function EditSubcontractorScreen() {
       reactivateCompany(company!.id);
     }
     router.back();
+  }
+
+  function handleDelete() {
+    Alert.alert(
+      'Delete Subcontractor',
+      `Are you sure you want to delete ${company!.name}? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            deleteCompany(company!.id);
+            router.back();
+          },
+        },
+      ]
+    );
   }
 
   return (
@@ -141,7 +160,7 @@ export default function EditSubcontractorScreen() {
           borderRadius: Radius.lg,
           borderCurve: 'continuous',
           borderWidth: 1.5,
-          borderColor: company.active ? colors.danger : colors.success,
+          borderColor: company.active ? colors.warning : colors.success,
           alignItems: 'center',
           justifyContent: 'center',
           opacity: pressed ? 0.7 : 1,
@@ -150,10 +169,29 @@ export default function EditSubcontractorScreen() {
         <Text
           style={[
             Typography.bodySemibold,
-            { color: company.active ? colors.danger : colors.success, fontSize: 16 },
+            { color: company.active ? colors.warning : colors.success, fontSize: 16 },
           ]}
         >
           {company.active ? 'Deactivate Subcontractor' : 'Reactivate Subcontractor'}
+        </Text>
+      </Pressable>
+
+      {/* Delete */}
+      <Pressable
+        onPress={handleDelete}
+        style={({ pressed }) => ({
+          height: 52,
+          borderRadius: Radius.lg,
+          borderCurve: 'continuous',
+          borderWidth: 1.5,
+          borderColor: colors.danger,
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: pressed ? 0.7 : 1,
+        })}
+      >
+        <Text style={[Typography.bodySemibold, { color: colors.danger, fontSize: 16 }]}>
+          Delete Subcontractor
         </Text>
       </Pressable>
     </ScrollView>

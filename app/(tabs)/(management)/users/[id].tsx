@@ -3,8 +3,10 @@ import {
   ScrollView,
   View,
   Text,
+  TextInput,
   Pressable,
   StyleSheet,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -12,11 +14,10 @@ import { useTheme } from '@/lib/hooks/useTheme';
 import { useManagement } from '@/lib/context/ManagementContext';
 import { Typography, Spacing, Radius, RoleConfig } from '@/lib/theme';
 import { Avatar } from '@/components/ui';
-import { useAuth } from '@/lib/context/AuthContext';
 import type { UserRole } from '@/lib/types';
 
+// AP manages operatives only
 const ROLES: { value: UserRole; icon: string }[] = [
-  { value: 'Appointed_Person', icon: 'account-star-outline' },
   { value: 'Crane_Supervisor', icon: 'account-hard-hat-outline' },
   { value: 'Crane_Operator', icon: 'crane' },
   { value: 'Slinger_Signaller', icon: 'hand-wave-outline' },
@@ -26,13 +27,16 @@ const ROLES: { value: UserRole; icon: string }[] = [
 export default function EditUserScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { colors } = useTheme();
-  const { users, companies, updateUser, deactivateUser, reactivateUser } = useManagement();
-  const { availableSites } = useAuth();
+  const { users, companies, updateUser, deactivateUser, reactivateUser, deleteUser } =
+    useManagement();
 
   const user = users.find((u) => u.id === id);
 
-  const [role, setRole] = useState<UserRole>(user?.role ?? 'Crane_Operator');
-  const [siteIds, setSiteIds] = useState<string[]>(user?.siteIds ?? []);
+  const [name, setName] = useState(user?.name ?? '');
+  const [role, setRole] = useState<UserRole>(
+    // If existing user has a role not in AP's list (e.g. Appointed_Person), show Crane_Operator
+    ROLES.find((r) => r.value === user?.role) ? (user?.role ?? 'Crane_Operator') : 'Crane_Operator'
+  );
   const [companyId, setCompanyId] = useState<string>(user?.companyId ?? '');
 
   if (!user) return null;
@@ -41,26 +45,20 @@ export default function EditUserScreen() {
   const activeCompanies = companies.filter((c) => c.active);
 
   const hasChanges =
+    name.trim() !== user.name ||
     role !== user.role ||
-    JSON.stringify([...siteIds].sort()) !== JSON.stringify([...user.siteIds].sort()) ||
     (isSubcontractor && companyId !== user.companyId);
 
   const canSave =
-    siteIds.length > 0 &&
+    name.trim().length > 0 &&
     (!isSubcontractor || companyId.length > 0) &&
     hasChanges;
-
-  function toggleSite(sid: string) {
-    setSiteIds((prev) =>
-      prev.includes(sid) ? prev.filter((s) => s !== sid) : [...prev, sid]
-    );
-  }
 
   function handleSave() {
     if (!canSave) return;
     updateUser(user!.id, {
+      name: name.trim(),
       role,
-      siteIds,
       companyId: isSubcontractor ? companyId : undefined,
     });
     router.back();
@@ -75,6 +73,24 @@ export default function EditUserScreen() {
     router.back();
   }
 
+  function handleDelete() {
+    Alert.alert(
+      'Delete User',
+      `Are you sure you want to delete ${user!.name}? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            deleteUser(user!.id);
+            router.back();
+          },
+        },
+      ]
+    );
+  }
+
   return (
     <ScrollView
       contentInsetAdjustmentBehavior="automatic"
@@ -82,7 +98,7 @@ export default function EditUserScreen() {
       contentContainerStyle={{ padding: Spacing.lg, gap: Spacing.xl, paddingBottom: 48 }}
       keyboardShouldPersistTaps="handled"
     >
-      {/* Identity (read-only) */}
+      {/* Identity header */}
       <View
         style={{
           flexDirection: 'row',
@@ -94,9 +110,25 @@ export default function EditUserScreen() {
           borderCurve: 'continuous',
         }}
       >
-        <Avatar name={user.name} size={52} />
-        <View style={{ flex: 1, gap: 2 }}>
-          <Text style={[Typography.headingMd, { color: colors.textPrimary }]}>{user.name}</Text>
+        <Avatar name={name || user.name} size={52} />
+        <View style={{ flex: 1, gap: Spacing.xs }}>
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            placeholder="Full name"
+            placeholderTextColor={colors.textTertiary}
+            autoCapitalize="words"
+            style={[
+              Typography.headingMd,
+              {
+                color: colors.textPrimary,
+                padding: 0,
+                borderBottomWidth: 1,
+                borderBottomColor: colors.border,
+                paddingBottom: 2,
+              },
+            ]}
+          />
           <Text style={[Typography.bodyMd, { color: colors.textSecondary }]}>{user.email}</Text>
         </View>
       </View>
@@ -156,47 +188,6 @@ export default function EditUserScreen() {
                     style={{ marginLeft: 'auto' }}
                   />
                 )}
-              </Pressable>
-            );
-          })}
-        </View>
-      </Section>
-
-      {/* Site Access */}
-      <Section label="Site Access">
-        <View style={{ gap: Spacing.sm }}>
-          {availableSites.map((s) => {
-            const isSelected = siteIds.includes(s.id);
-            return (
-              <Pressable
-                key={s.id}
-                onPress={() => toggleSite(s.id)}
-                style={({ pressed }) => ({
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: Spacing.md,
-                  padding: Spacing.md,
-                  borderRadius: Radius.md,
-                  borderCurve: 'continuous',
-                  borderWidth: 1.5,
-                  borderColor: isSelected ? colors.accent : colors.border,
-                  backgroundColor: isSelected ? colors.accentSubtle : colors.surface,
-                  opacity: pressed ? 0.8 : 1,
-                })}
-              >
-                <MaterialCommunityIcons
-                  name={isSelected ? 'checkbox-marked-circle' : 'checkbox-blank-circle-outline'}
-                  size={20}
-                  color={isSelected ? colors.accent : colors.textTertiary}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={[Typography.bodySemibold, { color: colors.textPrimary }]}>
-                    {s.name}
-                  </Text>
-                  <Text style={[Typography.bodySm, { color: colors.textSecondary }]}>
-                    {s.location}
-                  </Text>
-                </View>
               </Pressable>
             );
           })}
@@ -273,7 +264,6 @@ export default function EditUserScreen() {
         </Text>
       </Pressable>
 
-      {/* Separator */}
       <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
 
       {/* Deactivate / Reactivate */}
@@ -284,7 +274,7 @@ export default function EditUserScreen() {
           borderRadius: Radius.lg,
           borderCurve: 'continuous',
           borderWidth: 1.5,
-          borderColor: user.active ? colors.danger : colors.success,
+          borderColor: user.active ? colors.warning : colors.success,
           alignItems: 'center',
           justifyContent: 'center',
           opacity: pressed ? 0.7 : 1,
@@ -293,10 +283,31 @@ export default function EditUserScreen() {
         <Text
           style={[
             Typography.bodySemibold,
-            { color: user.active ? colors.danger : colors.success, fontSize: 16 },
+            { color: user.active ? colors.warning : colors.success, fontSize: 16 },
           ]}
         >
           {user.active ? 'Deactivate User' : 'Reactivate User'}
+        </Text>
+      </Pressable>
+
+      {/* Delete */}
+      <Pressable
+        onPress={handleDelete}
+        style={({ pressed }) => ({
+          height: 52,
+          borderRadius: Radius.lg,
+          borderCurve: 'continuous',
+          borderWidth: 1.5,
+          borderColor: colors.danger,
+          alignItems: 'center',
+          justifyContent: 'center',
+          opacity: pressed ? 0.7 : 1,
+        })}
+      >
+        <Text
+          style={[Typography.bodySemibold, { color: colors.danger, fontSize: 16 }]}
+        >
+          Delete User
         </Text>
       </Pressable>
     </ScrollView>

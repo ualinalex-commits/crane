@@ -60,6 +60,9 @@ interface ManagementContextValue {
   updateCompany: (id: string, changes: Partial<Company>) => void;
   deactivateCompany: (id: string) => void;
   reactivateCompany: (id: string) => void;
+  deleteUser: (id: string) => void;
+  deleteCrane: (id: string) => void;
+  deleteCompany: (id: string) => void;
 }
 
 const ManagementContext = createContext<ManagementContextValue | null>(null);
@@ -255,6 +258,26 @@ export function ManagementProvider({ children }: { children: React.ReactNode }) 
       setCompanies((prev) => prev.map((c) => (c.id === id ? { ...c, active: true } : c)));
       supabase.from('companies').update({ active: true }).eq('id', id)
         .then(({ error }) => { if (error) console.error('reactivateCompany:', error); });
+    },
+
+    deleteUser: (id) => {
+      setUsers((prev) => prev.filter((u) => u.id !== id));
+      supabase.from('user_sites').delete().eq('user_id', id).then(() => {
+        supabase.from('profiles').delete().eq('id', id)
+          .then(({ error }) => { if (error) console.error('deleteUser:', error); });
+      });
+    },
+
+    deleteCrane: (id) => {
+      setCranes((prev) => prev.filter((c) => c.id !== id));
+      supabase.from('cranes').delete().eq('id', id)
+        .then(({ error }) => { if (error) console.error('deleteCrane:', error); });
+    },
+
+    deleteCompany: (id) => {
+      setCompanies((prev) => prev.filter((c) => c.id !== id));
+      supabase.from('companies').delete().eq('id', id)
+        .then(({ error }) => { if (error) console.error('deleteCompany:', error); });
     },
   };
 
